@@ -1,97 +1,110 @@
-/***************************************************
- * (c) 2016-2017 Dynatrace LLC
+/**
+ * Copyright 2018 Dynatrace LLC
  *
- * @author: Christian Schwarzbauer
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
+
 package com.dynatrace.openkit.protocol;
 
-import java.util.StringTokenizer;
+import java.util.List;
 
 /**
  * Implements a status response which is sent for the request types status check and beacon send.
  */
 public class StatusResponse extends Response {
 
-	// status response constants
-	private static final String RESPONSE_KEY_CAPTURE = "cp";
-	private static final String RESPONSE_KEY_SEND_INTERVAL = "si";
-	private static final String RESPONSE_KEY_MONITOR_NAME = "bn";
-	private static final String RESPONSE_KEY_SERVER_ID = "id";
-	private static final String RESPONSE_KEY_MAX_BEACON_SIZE = "bl";
-	private static final String RESPONSE_KEY_CAPTURE_ERRORS = "er";
-	private static final String RESPONSE_KEY_CAPTURE_CRASHES = "cr";
+    // status response constants
+    static final String RESPONSE_KEY_CAPTURE = "cp";
+    static final String RESPONSE_KEY_SEND_INTERVAL = "si";
+    static final String RESPONSE_KEY_MONITOR_NAME = "bn";
+    static final String RESPONSE_KEY_SERVER_ID = "id";
+    static final String RESPONSE_KEY_MAX_BEACON_SIZE = "bl";
+    static final String RESPONSE_KEY_CAPTURE_ERRORS = "er";
+    static final String RESPONSE_KEY_CAPTURE_CRASHES = "cr";
 
-	// settings contained in status response
-	private boolean capture = true;
-	private int sendInterval = -1;
-	private String monitorName = null;
-	private int serverID = -1;
-	private int maxBeaconSize = -1;
-	private boolean captureErrors = true;
-	private boolean captureCrashes = true;
+    // settings contained in status response
+    private boolean capture = true;
+    private int sendInterval = -1;
+    private String monitorName = null;
+    private int serverID = -1;
+    private int maxBeaconSize = -1;
+    private boolean captureErrors = true;
+    private boolean captureCrashes = true;
 
-	// *** constructors ***
+    // *** constructors ***
 
-	public StatusResponse(String response, int responseCode) {
-		super(responseCode);
-		parseResponse(response);
-	}
+    public StatusResponse(String response, int responseCode) {
+        super(responseCode);
+        parseResponse(response);
+    }
 
-	// *** private methods ***
+    // *** private methods ***
 
-	// parses status check response
-	private void parseResponse(String response) {
-		StringTokenizer tokenizer = new StringTokenizer(response, "&=");
-		while(tokenizer.hasMoreTokens()) {
-			String key = tokenizer.nextToken();
-			String value = tokenizer.nextToken();
+    // parses status check response
+    private void parseResponse(String response) {
 
-			if (RESPONSE_KEY_CAPTURE.equals(key)) {
-				capture = (Integer.parseInt(value) == 1);
-			} else if (RESPONSE_KEY_SEND_INTERVAL.equals(key)) {
-				sendInterval = Integer.parseInt(value) * 1000;
-			} else if (RESPONSE_KEY_MONITOR_NAME.equals(key)) {
-				monitorName = value;
-			} else if (RESPONSE_KEY_SERVER_ID.equals(key)) {
-				serverID = Integer.parseInt(value);
-			} else if (RESPONSE_KEY_MAX_BEACON_SIZE.equals(key)) {
-				maxBeaconSize = Integer.parseInt(value) * 1024;
-			} else if (RESPONSE_KEY_CAPTURE_ERRORS.equals(key)) {
-				captureErrors = (Integer.parseInt(value) != 0);					// 1 (always on) and 2 (only on WiFi) are treated the same
-			} else if (RESPONSE_KEY_CAPTURE_CRASHES.equals(key)) {
-				captureCrashes = (Integer.parseInt(value) != 0);				// 1 (always on) and 2 (only on WiFi) are treated the same
-			}
-		}
-	}
+        if (response == null || response.isEmpty()) {
+            return;
+        }
 
-	// *** getter methods ***
+        List<KeyValuePair> parsedResponse = Response.parseResponseKeyValuePair(response);
+        for (KeyValuePair kv : parsedResponse) {
 
-	public boolean isCapture() {
-		return capture;
-	}
+            if (RESPONSE_KEY_CAPTURE.equals(kv.key)) {
+                capture = (Integer.parseInt(kv.value) == 1);
+            } else if (RESPONSE_KEY_SEND_INTERVAL.equals(kv.key)) {
+                sendInterval = Integer.parseInt(kv.value) * 1000;
+            } else if (RESPONSE_KEY_MONITOR_NAME.equals(kv.key)) {
+                monitorName = kv.value;
+            } else if (RESPONSE_KEY_SERVER_ID.equals(kv.key)) {
+                serverID = Integer.parseInt(kv.value);
+            } else if (RESPONSE_KEY_MAX_BEACON_SIZE.equals(kv.key)) {
+                maxBeaconSize = Integer.parseInt(kv.value) * 1024;
+            } else if (RESPONSE_KEY_CAPTURE_ERRORS.equals(kv.key)) {
+                captureErrors = (Integer.parseInt(kv.value) != 0);                    // 1 (always on) and 2 (only on WiFi) are treated the same
+            } else if (RESPONSE_KEY_CAPTURE_CRASHES.equals(kv.key)) {
+                captureCrashes = (Integer.parseInt(kv.value) != 0);                // 1 (always on) and 2 (only on WiFi) are treated the same
+            }
+        }
+    }
 
-	public int getSendInterval() {
-		return sendInterval;
-	}
+    // *** getter methods ***
 
-	public String getMonitorName() {
-		return monitorName;
-	}
+    public boolean isCapture() {
+        return capture;
+    }
 
-	public int getServerID() {
-		return serverID;
-	}
+    public int getSendInterval() {
+        return sendInterval;
+    }
 
-	public int getMaxBeaconSize() {
-		return maxBeaconSize;
-	}
+    public String getMonitorName() {
+        return monitorName;
+    }
 
-	public boolean isCaptureErrors() {
-		return captureErrors;
-	}
+    public int getServerID() {
+        return serverID;
+    }
 
-	public boolean isCaptureCrashes() {
-		return captureCrashes;
-	}
+    public int getMaxBeaconSize() {
+        return maxBeaconSize;
+    }
 
+    public boolean isCaptureErrors() {
+        return captureErrors;
+    }
+
+    public boolean isCaptureCrashes() {
+        return captureCrashes;
+    }
 }

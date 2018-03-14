@@ -1,7 +1,23 @@
+/**
+ * Copyright 2018 Dynatrace LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.dynatrace.openkit.core.communication;
 
 import com.dynatrace.openkit.core.SessionImpl;
-import com.dynatrace.openkit.core.configuration.AbstractConfiguration;
+import com.dynatrace.openkit.core.configuration.Configuration;
 import com.dynatrace.openkit.protocol.HTTPClient;
 import com.dynatrace.openkit.protocol.StatusResponse;
 import com.dynatrace.openkit.providers.HTTPClientProvider;
@@ -22,7 +38,7 @@ public class BeaconSendingContext {
      */
     static final long DEFAULT_SLEEP_TIME_MILLISECONDS = TimeUnit.SECONDS.toMillis(1);
 
-    private final AbstractConfiguration configuration;
+    private final Configuration configuration;
     private final HTTPClientProvider httpClientProvider;
     private final TimingProvider timingProvider;
 
@@ -72,10 +88,10 @@ public class BeaconSendingContext {
      * Constructor.
      *
      * <p>
-     *     The state is initialized to {@link BeaconSendingInitState},
+     * The state is initialized to {@link BeaconSendingInitState},
      * </p>
      */
-    public BeaconSendingContext(AbstractConfiguration configuration,
+    public BeaconSendingContext(Configuration configuration,
                                 HTTPClientProvider httpClientProvider,
                                 TimingProvider timingProvider) {
 
@@ -111,7 +127,7 @@ public class BeaconSendingContext {
      * Wait until OpenKit has been fully initialized.
      *
      * <p>
-     *     If initialization is interrupted (e.g. {@link #requestShutdown()} was called), then this method also returns.
+     * If initialization is interrupted (e.g. {@link #requestShutdown()} was called), then this method also returns.
      * </p>
      *
      * @return {@code} true OpenKit is fully initialized, {@code false} OpenKit init got interrupted.
@@ -130,11 +146,10 @@ public class BeaconSendingContext {
      * Wait until OpenKit has been fully initialized or timeout expired.
      *
      * <p>
-     *     If initialization is interrupted (e.g. {@link #requestShutdown()} was called), then this method also returns.
+     * If initialization is interrupted (e.g. {@link #requestShutdown()} was called), then this method also returns.
      * </p>
      *
      * @param timeoutMillis The maximum number of milliseconds to wait for initialization being completed.
-     *
      * @return {@code} true OpenKit is fully initialized, {@code false} OpenKit init got interrupted or time to wait expired.
      */
     public boolean waitForInit(long timeoutMillis) {
@@ -178,6 +193,16 @@ public class BeaconSendingContext {
     }
 
     /**
+     * Initialize time synchronization with cluster time.
+     *
+     * @param clusterTimeOffset   the cluster offset
+     * @param isTimeSyncSupported {@code true} if time sync is supported, otherwise {@code false}
+     */
+    void initializeTimeSync(long clusterTimeOffset, boolean isTimeSyncSupported) {
+        timingProvider.initialize(clusterTimeOffset, isTimeSyncSupported);
+    }
+
+    /**
      * Gets a boolean flag indicating whether time sync is supported or not.
      *
      * @return {@code true} if time sync is supported, {@code false} otherwise.
@@ -187,19 +212,24 @@ public class BeaconSendingContext {
     }
 
     /**
-     * Disable the time sync support.
-     *
-     * <p>
-     *     Note: There is no way to re-enable it, because as soon as a server tells OpenKit it does not support
-     *     time syncing, a time sync request is never again re-executed.
-     * </p>
+     * Disables the time sync
      */
-    void disableTimeSyncSupport() {
+    public void disableTimeSyncSupport() {
         timeSyncSupported = false;
     }
 
     /**
+     * Gets a boolean flag indicating whether the time sync has been performed before
+     *
+     * @return {@code true} if time sync was performed, {@code false} otherwise
+     */
+    boolean isTimeSynced() {
+        return !isTimeSyncSupported() || getLastTimeSyncTime() >= 0;
+    }
+
+    /**
      * Gets the current state.
+     *
      * @return current state.
      */
     AbstractBeaconSendingState getCurrentState() {
@@ -217,9 +247,9 @@ public class BeaconSendingContext {
 
     /**
      * Complete OpenKit initialization.
-     *
+
      * <p>
-     *     This will wake up every caller waiting in the {@link #waitForInit()} method.
+     * This will wake up every caller waiting in the {@link #waitForInit()} method.
      * </p>
      *
      * @param success {@code true} if OpenKit was successfully initialized, {@code false} if it was interrupted.
@@ -231,6 +261,7 @@ public class BeaconSendingContext {
 
     /**
      * Gets the HTTP client provider.
+     *
      * @return A class responsible for retrieving an instance of {@link HTTPClient}.
      */
     HTTPClientProvider getHTTPClientProvider() {
@@ -239,6 +270,7 @@ public class BeaconSendingContext {
 
     /**
      * Convenience method to retrieve an HTTP client.
+     *
      * @return HTTP client received from {@link HTTPClientProvider}.
      */
     HTTPClient getHTTPClient() {
@@ -247,6 +279,7 @@ public class BeaconSendingContext {
 
     /**
      * Gets the current timestamp.
+     *
      * @return current timestamp as milliseconds elapsed since epoch (1970-01-01T00:00:00.000)
      */
     long getCurrentTimestamp() {
@@ -255,6 +288,7 @@ public class BeaconSendingContext {
 
     /**
      * Sleep some time ({@link #DEFAULT_SLEEP_TIME_MILLISECONDS}.
+     *
      * @throws InterruptedException When sleeping thread got interrupted.
      */
     void sleep() throws InterruptedException {
@@ -265,7 +299,6 @@ public class BeaconSendingContext {
      * Sleep given amount of milliseconds.
      *
      * @param millis The number of milliseconds to sleep.
-     *
      * @throws InterruptedException When sleeping thread got interrupted.
      */
     void sleep(long millis) throws InterruptedException {
@@ -336,6 +369,8 @@ public class BeaconSendingContext {
         for (SessionImpl session : finishedSessions) {
             session.clearCapturedData();
         }
+        finishedSessions.clear(); // clear finished sessions also
+
         // clear captured data from open sessions
         for (SessionImpl session : openSessions) {
             session.clearCapturedData();
@@ -344,10 +379,10 @@ public class BeaconSendingContext {
 
     /**
      * Gets the next finished session from the list of all finished sessions.
-     *
      * <p>
-     *     This call also removes the session from the underlying data structure.
-     *     If there are no finished sessions any more, this method returns null.
+     * <p>
+     * This call also removes the session from the underlying data structure.
+     * If there are no finished sessions any more, this method returns null.
      * </p>
      *
      * @return A finished session or {@code null} if there is no finished session.
@@ -358,9 +393,9 @@ public class BeaconSendingContext {
 
     /**
      * Gets all open sessions.
-     *
      * <p>
-     *     This returns a shallow copy of all open sessions.
+     * <p>
+     * This returns a shallow copy of all open sessions.
      * </p>
      */
     SessionImpl[] getAllOpenSessions() {
@@ -369,10 +404,10 @@ public class BeaconSendingContext {
 
     /**
      * Gets all finished sessions.
-     *
      * <p>
-     *     This returns a shallow copy of all finished sessions and is intended only
-     *     for testing purposes.
+     * <p>
+     * This returns a shallow copy of all finished sessions and is intended only
+     * for testing purposes.
      * </p>
      */
     SessionImpl[] getAllFinishedSessions() {
@@ -395,9 +430,9 @@ public class BeaconSendingContext {
 
     /**
      * Start a new session.
-     *
      * <p>
-     *     This add the {@code session} to the internal container of open sessions.
+     * <p>
+     * This add the {@code session} to the internal container of open sessions.
      * </p>
      *
      * @param session The new session to start.
@@ -407,11 +442,24 @@ public class BeaconSendingContext {
     }
 
     /**
-     * Finish a session which has been started previously using {@link #startSession(SessionImpl)}.
+     * Push back a finished session, that was previously retrieved via {@link #getNextFinishedSession()}.
      *
      * <p>
-     *     If the session cannot be found in the container storing all open sessions, the parameter is ignored,
-     *     otherwise it's removed from the container storing open sessions and added to the finished session container.
+     * This method will not check for duplicate entries, so be careful what's pushed back.
+     * </p>
+     *
+     * @param session The session to push back to the list of finished ones.
+     */
+    public void pushBackFinishedSession(SessionImpl session) {
+        finishedSessions.add(session);
+    }
+
+    /**
+     * Finish a session which has been started previously using {@link #startSession(SessionImpl)}.
+     * <p>
+     * <p>
+     * If the session cannot be found in the container storing all open sessions, the parameter is ignored,
+     * otherwise it's removed from the container storing open sessions and added to the finished session container.
      * </p>
      *
      * @param session The session to finish.

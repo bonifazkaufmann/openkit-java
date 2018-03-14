@@ -1,13 +1,29 @@
+/**
+ * Copyright 2018 Dynatrace LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.dynatrace.openkit.test;
 
-import com.dynatrace.openkit.core.configuration.AbstractConfiguration;
-import com.dynatrace.openkit.core.configuration.AppMonConfiguration;
-import com.dynatrace.openkit.core.configuration.DynatraceConfiguration;
-import com.dynatrace.openkit.core.configuration.DynatraceManagedConfiguration;
+import com.dynatrace.openkit.core.Device;
+import com.dynatrace.openkit.core.configuration.BeaconCacheConfiguration;
+import com.dynatrace.openkit.core.configuration.Configuration;
+import com.dynatrace.openkit.core.configuration.OpenKitType;
+import com.dynatrace.openkit.protocol.ssl.SSLStrictTrustManager;
+import com.dynatrace.openkit.providers.DefaultSessionIDProvider;
 import org.junit.Test;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 public class ConfigurationTest {
@@ -17,52 +33,17 @@ public class ConfigurationTest {
     private static final String applicationVersion = "0.3";
 
     @Test
-    public void saasUrlIsCorrect() {
-        String tenantUrl = String.format("https://%s.%s", tenantId, host);
+    public void urlIsSetCorrectly() {
+        String tenantURL = String.format("https://%s.%s/mbeacon", tenantId, host);
 
-        AbstractConfiguration configuration =
-            new DynatraceConfiguration("", "", 17, tenantUrl, false);
+        Configuration configuration = getDynatraceConfig(tenantURL);
 
-        String expected = String.format("%s/mbeacon", tenantUrl);
-
-        assertEquals(expected, configuration.getHttpClientConfig().getBaseUrl());
+        assertEquals(tenantURL, configuration.getHttpClientConfig().getBaseURL());
     }
 
-    @Test
-    public void mangedUrlIsCorrect() {
-        String managedHost = String.format("http://%s", host);
-
-        AbstractConfiguration configuration =
-            new DynatraceManagedConfiguration(tenantId, "", "",17, managedHost, false);
-
-        String expected = String.format("%s/mbeacon/%s", managedHost, tenantId);
-
-        assertEquals(expected, configuration.getHttpClientConfig().getBaseUrl());
-    }
-
-    @Test
-    public void appMonUrlIsCorrect() {
-        String appMonHost = String.format("https://%s", host);
-
-        AbstractConfiguration configuration = new AppMonConfiguration(applicationName, 17, appMonHost, false);
-
-        String expected = String.format("%s/dynaTraceMonitor", appMonHost);
-
-        assertEquals(expected, configuration.getHttpClientConfig().getBaseUrl());
-    }
-
-    @Test
-    public void applicationIdAndApplicationNameIdenticalForAppMonConfig() {
-        AbstractConfiguration configuration = new AppMonConfiguration(applicationName, 17, "", false);
-
-        assertThat(applicationName, is(configuration.getApplicationID()));
-        assertThat(applicationName, is(configuration.getApplicationName()));
-    }
-
-    @Test
-    public void defaultApplicationVersionIsCorrect() {
-        AbstractConfiguration configuration = new AppMonConfiguration(applicationName, 17, "", false);
-
-        assertThat(applicationVersion, is(configuration.getApplicationVersion()));
+    private Configuration getDynatraceConfig(String tenantURL) {
+        return new Configuration(OpenKitType.DYNATRACE, "", "", 17, tenantURL,
+            new DefaultSessionIDProvider(), new SSLStrictTrustManager(), new Device("", "", ""), "",
+            new BeaconCacheConfiguration(-1, -1, -1));
     }
 }

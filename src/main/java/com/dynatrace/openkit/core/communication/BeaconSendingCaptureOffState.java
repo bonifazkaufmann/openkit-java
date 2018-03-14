@@ -1,21 +1,36 @@
+/**
+ * Copyright 2018 Dynatrace LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.dynatrace.openkit.core.communication;
 
 import com.dynatrace.openkit.protocol.StatusResponse;
-import com.dynatrace.openkit.providers.TimeProvider;
 
 import java.util.concurrent.TimeUnit;
 
 /**
  * State where no data is captured. Periodically issues a status request to check if capturing shall be re-enabled.
  * The check interval is defined in {@link BeaconSendingCaptureOffState#INITIAL_RETRY_SLEEP_TIME_MILLISECONDS}.
- *
  * <p>
- *     Transition to:
- *     <ul>
- *         <li>{@link BeaconSendingCaptureOnState} if capturing is re-enabled</li>
- *         <li>{@link BeaconSendingFlushSessionsState} on shutdown</li>
- *         <li>{@link BeaconSendingTimeSyncState} if initial time sync failed</li>
- *     </ul>
+ * <p>
+ * Transition to:
+ * <ul>
+ * <li>{@link BeaconSendingCaptureOnState} if capturing is re-enabled</li>
+ * <li>{@link BeaconSendingFlushSessionsState} on shutdown</li>
+ * <li>{@link BeaconSendingTimeSyncState} if initial time sync failed</li>
+ * </ul>
  * </p>
  */
 class BeaconSendingCaptureOffState extends AbstractBeaconSendingState {
@@ -64,7 +79,7 @@ class BeaconSendingCaptureOffState extends AbstractBeaconSendingState {
             context.handleStatusResponse(statusResponse);
         }
         // if initial time sync failed before
-        if (context.isTimeSyncSupported() && !TimeProvider.isTimeSynced()) {
+        if (context.isTimeSyncSupported() && !context.isTimeSynced()) {
             // then retry initial time sync
             context.setNextState(new BeaconSendingTimeSyncState(true));
         } else if (statusResponse != null && context.isCaptureOn()) {

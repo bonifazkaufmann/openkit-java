@@ -1,7 +1,22 @@
+/**
+ * Copyright 2018 Dynatrace LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.dynatrace.openkit.core.communication;
 
 import com.dynatrace.openkit.protocol.TimeSyncResponse;
-import com.dynatrace.openkit.providers.TimeProvider;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -10,18 +25,19 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The state responsible for the time sync
- *
  * <p>
- *     In this state a time sync is performed.
+ * <p>
+ * In this state a time sync is performed.
  * </p>
- *
  * <p>
- *     Transition to:
- *     <ul>
- *         <li>{@link BeaconSendingCaptureOnState} if capturing is enabled ({@link BeaconSendingContext#isCaptureOn()} == {@code true})</li>
- *         <li>{@link BeaconSendingCaptureOffState} if capturing is disabled ({@link BeaconSendingContext#isCaptureOn()} == {@code false}) or time sync failed</li>
- *         <li>{@link BeaconSendingTerminalState} on shutdown</li>
- *     </ul>
+ * <p>
+ * Transition to:
+ * <ul>
+ * <li>{@link BeaconSendingCaptureOnState} if capturing is enabled ({@link BeaconSendingContext#isCaptureOn()} == {@code true})</li>
+ * <li>{@link BeaconSendingCaptureOffState} if capturing is disabled ({@link BeaconSendingContext#isCaptureOn()} == {@code false}) or time sync failed</li>
+ * <li>{@link BeaconSendingFlushSessionsState} on shutdown if not initial time sync</li>
+ * <li>{@link BeaconSendingTerminalState} on shutdown if initial time sync</li>
+ * </ul>
  * </p>
  */
 class BeaconSendingTimeSyncState extends AbstractBeaconSendingState {
@@ -161,7 +177,7 @@ class BeaconSendingTimeSyncState extends AbstractBeaconSendingState {
         }
 
         // initialize time provider with cluster time offset
-        TimeProvider.initialize(computeClusterTimeOffset(timeSyncOffsets), true);
+        context.initializeTimeSync(computeClusterTimeOffset(timeSyncOffsets), true);
 
         // also update the time when last time sync was performed to now
         context.setLastTimeSyncTime(context.getCurrentTimestamp());
@@ -196,7 +212,7 @@ class BeaconSendingTimeSyncState extends AbstractBeaconSendingState {
             }
         }
 
-        return (long) Math.round(sum / (double) count);
+        return Math.round(sum / (double) count);
     }
 
     private void handleErroneousTimeSyncRequest(BeaconSendingContext context) {
@@ -204,12 +220,12 @@ class BeaconSendingTimeSyncState extends AbstractBeaconSendingState {
         // if this is the initial sync try, we have to initialize the time provider
         // in every other case we keep the previous setting
         if (initialTimeSync) {
-            TimeProvider.initialize(0, false);
+            context.initializeTimeSync(0, context.isTimeSyncSupported());
         }
 
         if (context.isTimeSyncSupported()) {
             // server supports time sync
-            context.setNextState(initialTimeSync ? new BeaconSendingInitState() : new BeaconSendingCaptureOffState());
+            context.setNextState(new BeaconSendingCaptureOffState());
         } else {
             // otherwise set the next state based on the configuration
             setNextState(context);

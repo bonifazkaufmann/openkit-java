@@ -1,151 +1,192 @@
-/***************************************************
- * (c) 2016-2017 Dynatrace LLC
+/**
+ * Copyright 2018 Dynatrace LLC
  *
- * @author: Christian Schwarzbauer
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-package com.dynatrace.openkit.core;
 
-import java.net.URLConnection;
+package com.dynatrace.openkit.core;
 
 import com.dynatrace.openkit.api.Action;
 import com.dynatrace.openkit.api.WebRequestTracer;
 import com.dynatrace.openkit.protocol.Beacon;
-import com.dynatrace.openkit.providers.TimeProvider;
+
+import java.net.URLConnection;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Actual implementation of the {@link Action} interface.
  */
 public class ActionImpl implements Action {
 
-	// Action ID, name and parent ID (default: null)
-	private final int id;
-	private final String name;
-	private ActionImpl parentAction = null;
+    private static final WebRequestTracer NULL_WEB_REQUEST_TRACER = new NullWebRequestTracer();
 
-	// start/end time & sequence number
-	private final long startTime;
-	private long endTime = -1;
-	private final int startSequenceNo;
-	private int endSequenceNo = -1;
+    // Action ID, name and parent ID (default: null)
+    private final int id;
+    private final String name;
+    private ActionImpl parentAction = null;
 
-	// Beacon reference
-	private Beacon beacon;
+    // start/end time & sequence number
+    private final long startTime;
+    private final AtomicLong endTime = new AtomicLong(-1);
+    private final int startSequenceNo;
+    private int endSequenceNo = -1;
 
-	private SynchronizedQueue<Action> thisLevelActions = null;
+    // Beacon reference
+    private final Beacon beacon;
 
-	// *** constructors ***
+    private SynchronizedQueue<Action> thisLevelActions = null;
 
-	ActionImpl(Beacon beacon, String name, SynchronizedQueue<Action> parentActions) {
-		this(beacon, name, null, parentActions);
-	}
+    // *** constructors ***
 
-	ActionImpl(Beacon beacon, String name, ActionImpl parentAction, SynchronizedQueue<Action> thisLevelActions) {
-		this.beacon = beacon;
-		this.parentAction = parentAction;
+    ActionImpl(Beacon beacon, String name, SynchronizedQueue<Action> thisLevelActions) {
+        this(beacon, name, null, thisLevelActions);
+    }
 
-		this.startTime = TimeProvider.getTimestamp();
-		this.startSequenceNo = beacon.createSequenceNumber();
-		this.id = beacon.createID();
-		this.name = name;
+    ActionImpl(Beacon beacon, String name, ActionImpl parentAction, SynchronizedQueue<Action> thisLevelActions) {
+        this.beacon = beacon;
+        this.parentAction = parentAction;
 
-		this.thisLevelActions = thisLevelActions;
-		this.thisLevelActions.put(this);
-	}
+        this.startTime = beacon.getCurrentTimestamp();
+        this.startSequenceNo = beacon.createSequenceNumber();
+        this.id = beacon.createID();
+        this.name = name;
 
-	// *** Action interface methods ***
+        this.thisLevelActions = thisLevelActions;
+        this.thisLevelActions.put(this);
+    }
 
-	@Override
-	public Action reportEvent(String eventName) {
-		beacon.reportEvent(this, eventName);
-		return this;
-	}
+    // *** Action interface methods ***
 
-	@Override
-	public Action reportValue(String valueName, int value) {
-		beacon.reportValue(this, valueName, value);
-		return this;
-	}
 
-	@Override
-	public Action reportValue(String valueName, double value) {
-		beacon.reportValue(this, valueName, value);
-		return this;
-	}
+    @Override
+    public void close() {
+        leaveAction();
+    }
 
-	@Override
-	public Action reportValue(String valueName, String value) {
-		beacon.reportValue(this, valueName, value);
-		return this;
-	}
+    @Override
+    public Action reportEvent(String eventName) {
+        if (!isActionLeft()) {
+            beacon.reportEvent(this, eventName);
+        }
+        return this;
+    }
 
-	@Override
-	public Action reportError(String errorName, int errorCode, String reason) {
-		beacon.reportError(this, errorName, errorCode, reason);
-		return this;
-	}
+    @Override
+    public Action reportValue(String valueName, int value) {
+        if (!isActionLeft()) {
+            beacon.reportValue(this, valueName, value);
+        }
+        return this;
+    }
 
-	@Override
-	public WebRequestTracer traceWebRequest(URLConnection connection) {
-		return new WebRequestTracerURLConnection(beacon, this, connection);
-	}
+    @Override
+    public Action reportValue(String valueName, double value) {
+        if (!isActionLeft()) {
+            beacon.reportValue(this, valueName, value);
+        }
+        return this;
+    }
 
-	@Override
-	public WebRequestTracer traceWebRequest(String url) {
-		return new WebRequestTracerStringURL(beacon, this, url);
-	}
+    @Override
+    public Action reportValue(String valueName, String value) {
+        if (!isActionLeft()) {
+            beacon.reportValue(this, valueName, value);
+        }
+        return this;
+    }
 
-	@Override
-	public Action leaveAction() {
-		// check if leaveAction() was already called before by looking at endTime
-		if (endTime != -1) {
-			return parentAction;
-		}
+    @Override
+    public Action reportError(String errorName, int errorCode, String reason) {
+        if (!isActionLeft()) {
+            beacon.reportError(this, errorName, errorCode, reason);
+        }
+        return this;
+    }
 
-		return doLeaveAction();
-	}
+    @Override
+    public WebRequestTracer traceWebRequest(URLConnection connection) {
+        if (!isActionLeft()) {
+            return new WebRequestTracerURLConnection(beacon, this, connection);
+        }
 
-	protected Action doLeaveAction() {
-		// set end time and end sequence number
-		endTime = TimeProvider.getTimestamp();
-		endSequenceNo = beacon.createSequenceNumber();
+        return NULL_WEB_REQUEST_TRACER;
+    }
 
-		// add Action to Beacon
-		beacon.addAction(this);
+    @Override
+    public WebRequestTracer traceWebRequest(String url) {
+        if (!isActionLeft()) {
+            return new WebRequestTracerStringURL(beacon, this, url);
+        }
 
-		// remove Action from the Actions on this level
-		thisLevelActions.remove(this);
+        return NULL_WEB_REQUEST_TRACER;
+    }
 
-		return parentAction;			// can be null if there's no parent Action!
-	}
+    @Override
+    public Action leaveAction() {
+        // check if leaveAction() was already called before by looking at endTime
+        if (!endTime.compareAndSet(-1, beacon.getCurrentTimestamp())) {
+            return parentAction;
+        }
 
-	// *** getter methods ***
+        return doLeaveAction();
+    }
 
-	public int getID() {
-		return id;
-	}
+    protected Action doLeaveAction() {
+        // set end time and end sequence number
+        endTime.set(beacon.getCurrentTimestamp());
+        endSequenceNo = beacon.createSequenceNumber();
 
-	public String getName() {
-		return name;
-	}
+        // add Action to Beacon
+        beacon.addAction(this);
 
-	public int getParentID() {
-		return parentAction == null ? 0 : parentAction.getID();
-	}
+        // remove Action from the Actions on this level
+        thisLevelActions.remove(this);
 
-	public long getStartTime() {
-		return startTime;
-	}
+        return parentAction;            // can be null if there's no parent Action!
+    }
 
-	public long getEndTime() {
-		return endTime;
-	}
+    // *** getter methods ***
 
-	public int getStartSequenceNo() {
-		return startSequenceNo;
-	}
+    public int getID() {
+        return id;
+    }
 
-	public int getEndSequenceNo() {
-		return endSequenceNo;
-	}
+    public String getName() {
+        return name;
+    }
+
+    public int getParentID() {
+        return parentAction == null ? 0 : parentAction.getID();
+    }
+
+    public long getStartTime() {
+        return startTime;
+    }
+
+    public long getEndTime() {
+        return endTime.get();
+    }
+
+    public int getStartSequenceNo() {
+        return startSequenceNo;
+    }
+
+    public int getEndSequenceNo() {
+        return endSequenceNo;
+    }
+
+    boolean isActionLeft() {
+        return getEndTime() != -1;
+    }
 
 }

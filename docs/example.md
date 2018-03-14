@@ -5,121 +5,101 @@ developer's point of view. It explains the usage of all the API methods.
 
 ## Obtaining an OpenKit Instance
 
-OpenKit instances are obtained from the `OpenKitFactory` class.  
-Depending on the used backend system (Dynatrace SaaS/Dynatrace Managed/AppMon), the factory provides 
-different methods to create a new  OpenKit instance. Despite from this, the developer does not 
-need to distinguish between different backend systems.
+Depending on the backend a new OpenKit instance can be obtained by using either `DynatraceOpenKitBuilder` 
+or `AppMonOpenKitBuilder`. Despite from this, the developer does not need to distinguish between 
+different backend systems.
 
-### Dynatrace SaaS
- 
+### Dynatrace
+
+For Dynatrace SaaS and Dynatrace Managed the `DynatraceOpenKitBuilder` is used to build new OpenKit instances. 
+
 ```java
-String applicationName = "My OpenKit application";
 String applicationID = "application-id";
-long visitorID = 42;
-String endpointURL = "https://tenantid.beaconurl.com";
+long deviceID = 42;
+String endpointURL = "https://tenantid.beaconurl.com/mbeacon";
 
-// by default verbose logging is disabled
-OpenKit openKit = OpenKitFactory.createDynatraceInstance(applicationName, applicationID, visitorID, endpointURL);
+OpenKit openKit = new DynatraceOpenKitBuilder(endpointURL, applicationID, deviceID).build();
 ```
 
-* The `applicationName` parameter is the application's name created before in Dynatrace SaaS.
+* The `endpointURL` denotes the Dynatrace endpoint OpenKit communicates with and 
+  is shown when creating the application in Dynatrace. The endpoint URL can be found 
+  in the settings page of the custom application in Dynatrace.
 * The `applicationID` parameter is the unique identifier of the application in Dynatrace Saas. The
-application's id can be found in the settings page of the custom application in Dynatrace.
-* The `visitorID` is a unique identifier, which might be used to uniquely identify a device.
-* The `endpointURL` denotes the Dynatrace SaaS cluster endpoint OpenKit communicates with and 
-  is shown when creating the application in Dynatrace SaaS.
-The endpoint URL can be found in the settings page of the custom application in Dynatrace.
+  application's id can be found in the settings page of the custom application in Dynatrace.
+* The `deviceID` is a unique identifier, which might be used to uniquely identify a device.
 
-OpenKit provides extended log output by activating the verbose mode. This feature might come in quite handy during development,
-therefore an overloaded method exists, where verbose mode can be enabled or disabled.  
-To enable verbose mode, use the following example.
-
-```java
-String applicationName = "My OpenKit application";
-String applicationID = "application-id";
-long visitorID = 42;
-String endpointURL = "https://tenantid.beaconurl.com";
-boolean verbose = true;
-
-// by default verbose logging is disabled
-OpenKit openKit = OpenKitFactory.createDynatraceInstance(applicationName, applicationID, visitorID, endpointURL, verbose);
-```
-
-### Dynatrace Managed
-
-An OpenKit instance for Dynatrace Managed can be obtained in a similar manner, as shown in the example below.
-```java
-String applicationName = "My OpenKit application";
-String applicationID = "application-id";
-long visitorID = 42;
-String endpointURL = "https://tenantid.beaconurl.com";
-String tenantID = "tenant-id";
-
-// by default verbose logging is disabled
-OpenKit openKit = OpenKitFactory.createDynatraceManagedInstance(applicationName, applicationID, visitorID, endpointURL, tenantID);
-```
-
-* The `applicationName` parameter is the application's name created before in Dynatrace Managed.
-* The `applicationID` parameter is the unique identifier of the application in Dynatrace Managed. The
-application's id can be found in the settings page of the custom application in Dynatrace.
-* The `visitorID` is a unique identifier, which might be used to uniquely identify a device.
-* The `endpointURL` denotes the Dynatrace Managed endpoint OpenKit communicates with. The endpoint URL can be found in 
-the settings page of the custom application in Dynatrace.
-* The `tenantID` is the tenant used by Dynatrace Managed.
-
-Again an overloaded method exists to enable verbose logging, as shown below.
-```java
-String applicationName = "My OpenKit application";
-String applicationID = "application-id";
-long visitorID = 42;
-String endpointURL = "https://beaconurl.com";
-String tenantID = "tenant-id";
-boolean verbose = true;
-
-// by default verbose logging is disabled
-OpenKit openKit = OpenKitFactory.createDynatraceManagedInstance(applicationName, applicationID, visitorID, endpointURL, tenantID, verbose);
-```
+:grey_exclamation: For Dynatrace Managed the endpoint URL looks a bit different.
 
 ### AppMon
 
-The example below demonstrates how to connect an OpenKit application to an AppMon endpoint.
+An OpenKit instance for AppMon can be obtained by using the `AppMonOpenKitBuilder`.
+
 ```java
 String applicationName = "My OpenKit application";
-long visitorID = 42;
-String endpointURL = "https://beaconurl.com";
+long deviceID = 42;
+String endpointURL = "https://beaconurl.com/dynaTraceMonitor";
 
 // by default verbose logging is disabled
-OpenKit openKit = OpenKitFactory.createAppMonInstance(applicationName, visitorID, endpointURL);
+OpenKit openKit = new AppMonOpenKitBuilder(endpointURL, applicationName, deviceID).build();
 ```
 
-* The `applicationName` parameter is the application's name in AppMon and is also used as the application's id.
-* The `visitorID` is a unique identifier, which might be used to uniquely identify a device.
 * The `endpointURL` denotes the AppMon endpoint OpenKit communicates with.
+* The `applicationName` parameter is the application's name in AppMon and is also used as the application's id.
+* The `deviceID` is a unique identifier, which might be used to uniquely identify a device.
 
-If verbose OpenKit logging output is wanted, an overloaded method can be used as demonstrated below.
-```java
-String applicationName = "My OpenKit application";
-long visitorID = 42;
-String endpointURL = "https://tenantid.beaconurl.com";
-boolean verbose = true;
+### Optional Configuration
 
-// by default verbose logging is disabled
-OpenKit openKit = OpenKitFactory.createAppMonInstance(applicationName, visitorID, endpointURL, verbose);
-```
+In addition to the mandatory parameters described above, the builder provides additional methods to further 
+customize OpenKit. This includes device specific information like operating system, manufacturer, or model id. 
+
+| Method Name | Description | Default Value |
+| ------------- | ------------- | ---------- |
+| `withApplicationVersion`  | sets the application version  | `"1.0.0"` |
+| `withOperatingSystem`  | sets the operating system name | `"OpenKit 1.0.0"` |
+| `withManufacturer`  | sets the manufacturer | `"Dynatrace"` |
+| `withModelID`  | sets the model id  | `"OpenKitDevice"` |
+| `withBeaconCacheMaxRecordAge`  | sets the maximum age of an entry in the beacon cache in milliseconds | 1 h 45 min |
+| `withBeaconCacheLowerMemoryBoundary`  | sets the lower memory boundary of the beacon cache in bytes  | 100 MB |
+| `withBeaconCacheUpperMemoryBoundary`  |  sets the upper memory boundary of the beacon cache in bytes | 80 MB |
+| `enableVerbose`  | enables extended log output for OpenKit if the default logger is used  | `false` |
+
+:grey_exclamation: Please refer to the the JavaDoc for more information regarding possible configuration values.
+
+## SSL/TLS Security in OpenKit
+
+All OpenKit communication to the backend happens via HTTPS (TLS/SSL based on Java Framework support).
+By default OpenKit expects valid server certificates.
+However it is possible, if really needed, to bypass TLS/SSL certificate validation. This can be achieved by
+passing an implementation of `SSLTrustManager` by calling the `withTrustManager` on the builder.
+
+:warning: We do **NOT** recommend bypassing TLS/SSL server certificate validation, since this allows
+man-in-the-middle attacks.
+
+## Logging
+
+By default, OpenKit uses a logger implementation that logs to stdout. If the default logger is used, verbose 
+logging can be enabled by calling `enableVerbose` in the builder. By enabling verbose mode, info and debug
+messages are logged.
+
+A custom logger can be set by calling `withLogger` in the builder. When a custom logger is used, a call to 
+`enableVerbose` has no effect. In that case, debug and info logs are logged depending on the values returned 
+in `isDebugEnabled` and `isInfoEnabled`.
 
 ## Initializing OpenKit
 
-After the OpenKit instance is obtained, the `initialize` method must be called. Since initialization
-happens asynchronously the application developer might want to wait until initialization completes, as
-shown in the example below.
+When obtaining an OpenKit instance from the OpenKit builder the instance starts an automatic 
+initialization phase. By default, initialization is performed asynchronously. 
+
+There might be situations when a developer wants to ensure that initialization is completed before proceeding with 
+the program logic. For example, short-lived applications where a valid init and shutdown cannot be guaranteed. In
+such a case `waitForInitCompletion` can be used.
 
 ```java
-// initialize previously obtained OpenKit instance
-openKit.initialize();
-
-// and wait until it's fully initialized
+// wait until the OpenKit instance is fully initialized
 boolean success = openKit.waitForInitCompletion();
 ```
+
+:grey_exclamation: Please refer to the Javadoc for additional information.
 
 The method `waitForInitCompletion` blocks the calling thread until OpenKit is initialized. In case
 of misconfiguration this might block the calling thread indefinitely. The return value
@@ -127,10 +107,7 @@ indicates whether the OpenKit instance has been initialized or `shutdown` has be
 An overloaded method exists to wait a given amount of time for OpenKit to initialize as shown in the
 following example.
 ```java
-// initialize previously obtained OpenKit instance
-openKit.initialize();
-
-// wait 10 seconds for OpenKit
+// wait 10 seconds for OpenKit to complete initialization
 long timeoutInMilliseconds = 10 * 1000;
 boolean success = openKit.waitForInitCompletion(timeoutInMilliseconds);
 ```
@@ -156,24 +133,6 @@ This can be achieved by calling
 ```java
 String applicationVersion = "1.2.3.4";
 openKit.setApplicationVersion(applicationVersion);
-```
-
-## Providing Device specific Information
-
-Sometimes it might also be quite useful to provide information about the device the application
-is running on. The example below shows how to achieve this.
-```java
-// set operating system
-String operatingSystem = "Custom OS";
-openKit.getDevice().setOperatingSystem(operatingSystem);
-
-// set device manufacturer
-String deviceManufacturer = "ACME Inc.";
-openKit.getDevice().setManufacturer(deviceManufacturer);
-
-// set device/model identifier
-String deviceID = "12-34-56-78-90";
-openKit.getDevice().setModelID(deviceID);
 ```
 
 ## Creating a Session
@@ -351,7 +310,7 @@ webRequestTracer.stopTiming();
 If a third party lib is used for HTTP requests, the developer has the possibility to use an overloaded
 `traceWebRequest` method, taking only the URL string as argument. However when using this overloaded
 method the developer is responsible for adding the appropriate header field to the request.  
-The field name can be obtained from `OpenKit.WEBREQUEST_TAG_HEADER` and the field's value is obtained
+The field name can be obtained from `OpenKitConstants.WEBREQUEST_TAG_HEADER` and the field's value is obtained
 from `getTag` method (see class `WebRequestTracer`).
 
 ```java
@@ -361,15 +320,17 @@ String url = "http://www.my-backend.com/api/v3/users";
 WebRequestTracer webRequestTracer = action.traceWebRequest(url);
 
 // this is the HTTP header name & value which needs to be added to the HTTP request.
-String headerName = OpenKit.WEBREQUEST_TAG_HEADER;
+String headerName = OpenKitConstants.WEBREQUEST_TAG_HEADER;
 String headerValue = webRequestTracer.getTag();
 
-webRequestTracer.startTiming();
+webRequestTracer.start();
 
 // perform the request here & do not forget to add the HTTP header
 
-webRequestTracer.setResponseCode(200);
-webRequestTracer.stopTiming();
+webRequestTracer.setBytesSent(12345);     // 12345 bytes sent
+webRequestTracer.setBytesReceived(67890); // 67890 bytes received
+webRequestTracer.setResponseCode(200);    // 200 was the response code
+webRequestTracer.stop();
 ```
 
 
@@ -379,4 +340,4 @@ When an OpenKit instance is no longer needed (e.g. the application using OpenKit
 obtained instance can be cleared by invoking the `shutdown` method.  
 Calling the `shutdown` method blocks the calling thread while the OpenKit flushes data which has not been
 transmitted yet to the backend (Dynatrace SaaS/Dynatrace Managed/AppMon).  
-Details are explained in [internals.md](#internals.md)
+Details are explained in [internals.md](internals.md)

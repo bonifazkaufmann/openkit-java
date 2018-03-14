@@ -1,3 +1,19 @@
+/**
+ * Copyright 2018 Dynatrace LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.dynatrace.openkit.core.communication;
 
 import com.dynatrace.openkit.core.SessionImpl;
@@ -7,17 +23,15 @@ import com.dynatrace.openkit.protocol.StatusResponse;
  * The sending state, when init is completed and capturing is turned on.
  *
  * <p>
- *     Transitions to:
- *     <ul>
- *         <li>{@link BeaconSendingTimeSyncState} if {@link BeaconSendingTimeSyncState#isTimeSyncRequired(BeaconSendingContext)} is {@code true}</li>
- *         <li>{@link BeaconSendingCaptureOffState} if capturing is turned off</li>
- *         <li>{@link BeaconSendingFlushSessionsState} on shutdown</li>
- *     </ul>
+ * Transitions to:
+ * <ul>
+ * <li>{@link BeaconSendingTimeSyncState} if {@link BeaconSendingTimeSyncState#isTimeSyncRequired(BeaconSendingContext)} is {@code true}</li>
+ * <li>{@link BeaconSendingCaptureOffState} if capturing is turned off</li>
+ * <li>{@link BeaconSendingFlushSessionsState} on shutdown</li>
+ * </ul>
  * </p>
  */
 class BeaconSendingCaptureOnState extends AbstractBeaconSendingState {
-
-    private static final int BEACON_SEND_RETRY_ATTEMPTS = 2;
 
     /**
      * store last received status response
@@ -59,24 +73,38 @@ class BeaconSendingCaptureOnState extends AbstractBeaconSendingState {
 
     /**
      * Send all sessions which have been finished previously.
+     *
      * @param context Context.
      */
-    private void sendFinishedSessions(BeaconSendingContext context) throws InterruptedException {
+    private void sendFinishedSessions(BeaconSendingContext context) {
 
         // check if there's finished Sessions to be sent -> immediately send beacon(s) of finished Sessions
         SessionImpl finishedSession = context.getNextFinishedSession();
         while (finishedSession != null) {
-            statusResponse = finishedSession.sendBeacon(context.getHTTPClientProvider(), BEACON_SEND_RETRY_ATTEMPTS);
+            statusResponse = finishedSession.sendBeacon(context.getHTTPClientProvider());
+            if (statusResponse == null) {
+                // something went wrong,
+                if (!finishedSession.isEmpty()) {
+                    // well there is more data to send, and we could not do it (now)
+                    // just push it back
+                    context.pushBackFinishedSession(finishedSession);
+                    break; //  sending did not work, break out for now and retry it later
+                }
+            }
+
+            // session was sent - so remove it from beacon cache
+            finishedSession.clearCapturedData();
             finishedSession = context.getNextFinishedSession();
         }
     }
 
     /**
      * Check if the send interval (configured by server) has expired and start to send open sessions if it has expired.
+     *
      * @param context
      * @throws InterruptedException
      */
-    private void sendOpenSessions(BeaconSendingContext context) throws InterruptedException {
+    private void sendOpenSessions(BeaconSendingContext context) {
 
         long currentTimestamp = context.getCurrentTimestamp();
         if (currentTimestamp <= context.getLastOpenSessionBeaconSendTime() + context.getSendInterval()) {
@@ -85,7 +113,7 @@ class BeaconSendingCaptureOnState extends AbstractBeaconSendingState {
 
         SessionImpl[] openSessions = context.getAllOpenSessions();
         for (SessionImpl session : openSessions) {
-            statusResponse = session.sendBeacon(context.getHTTPClientProvider(), BEACON_SEND_RETRY_ATTEMPTS);
+            statusResponse = session.sendBeacon(context.getHTTPClientProvider());
         }
 
         context.setLastOpenSessionBeaconSendTime(currentTimestamp);

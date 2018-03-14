@@ -1,20 +1,30 @@
+/**
+ * Copyright 2018 Dynatrace LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.dynatrace.openkit.core.communication;
 
 import com.dynatrace.openkit.core.SessionImpl;
-import com.dynatrace.openkit.core.configuration.AbstractConfiguration;
+import com.dynatrace.openkit.core.configuration.Configuration;
 import com.dynatrace.openkit.core.configuration.HTTPClientConfiguration;
 import com.dynatrace.openkit.protocol.HTTPClient;
 import com.dynatrace.openkit.protocol.StatusResponse;
 import com.dynatrace.openkit.providers.HTTPClientProvider;
 import com.dynatrace.openkit.providers.TimingProvider;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.Timeout;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
-
-import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.assertThat;
@@ -23,10 +33,7 @@ import static org.mockito.Mockito.*;
 
 public class BeaconSendingContextTest {
 
-    @Rule
-    public Timeout timeout = new Timeout(5, TimeUnit.SECONDS);
-
-    private AbstractConfiguration configuration;
+    private Configuration configuration;
     private HTTPClientProvider httpClientProvider;
     private TimingProvider timingProvider;
     private AbstractBeaconSendingState mockState;
@@ -34,7 +41,7 @@ public class BeaconSendingContextTest {
     @Before
     public void setUp() {
 
-        configuration = mock(AbstractConfiguration.class);
+        configuration = mock(Configuration.class);
         httpClientProvider = mock(HTTPClientProvider.class);
         timingProvider = mock(TimingProvider.class);
         mockState = mock(AbstractBeaconSendingState.class);
@@ -60,7 +67,7 @@ public class BeaconSendingContextTest {
     }
 
     @Test
-    public void executeCurrentStateCallsExecuteOnCurrentState() throws InterruptedException {
+    public void executeCurrentStateCallsExecuteOnCurrentState() {
 
 
         BeaconSendingContext target = new BeaconSendingContext(configuration, httpClientProvider, timingProvider);
@@ -222,22 +229,12 @@ public class BeaconSendingContextTest {
     }
 
     @Test
-    public void timeSyncIsSupportedByDefault() {
-
-        // given
-        BeaconSendingContext target = new BeaconSendingContext(configuration, httpClientProvider, timingProvider);
-
-        // then
-        assertThat(target.isTimeSyncSupported(), is(true));
-    }
-
-    @Test
     public void timeSyncIsNotSupportedIfDisabled() {
 
         // given
         BeaconSendingContext target = new BeaconSendingContext(configuration, httpClientProvider, timingProvider);
 
-        // when time sync support is disabled
+        // when
         target.disableTimeSyncSupport();
 
         // then
@@ -422,14 +419,14 @@ public class BeaconSendingContextTest {
         target.startSession(mockSessionOne);
 
         // then
-        assertThat(target.getAllOpenSessions(), is(equalTo(new SessionImpl[] { mockSessionOne })));
+        assertThat(target.getAllOpenSessions(), is(equalTo(new SessionImpl[]{mockSessionOne})));
         assertThat(target.getAllFinishedSessions(), is(emptyArray()));
 
         // when starting second sessions
         target.startSession(mockSessionTwo);
 
         // then
-        assertThat(target.getAllOpenSessions(), is(equalTo(new SessionImpl[] { mockSessionOne, mockSessionTwo })));
+        assertThat(target.getAllOpenSessions(), is(equalTo(new SessionImpl[]{mockSessionOne, mockSessionTwo})));
         assertThat(target.getAllFinishedSessions(), is(emptyArray()));
     }
 
@@ -448,15 +445,15 @@ public class BeaconSendingContextTest {
         target.finishSession(mockSessionOne);
 
         // then
-        assertThat(target.getAllOpenSessions(), is(equalTo(new SessionImpl[] { mockSessionTwo })));
-        assertThat(target.getAllFinishedSessions(), is(equalTo(new SessionImpl[] { mockSessionOne })));
+        assertThat(target.getAllOpenSessions(), is(equalTo(new SessionImpl[]{mockSessionTwo})));
+        assertThat(target.getAllFinishedSessions(), is(equalTo(new SessionImpl[]{mockSessionOne})));
 
         // and when finishing the second session
         target.finishSession(mockSessionTwo);
 
         // then
         assertThat(target.getAllOpenSessions(), is(emptyArray()));
-        assertThat(target.getAllFinishedSessions(), is(equalTo(new SessionImpl[] { mockSessionOne, mockSessionTwo })));
+        assertThat(target.getAllFinishedSessions(), is(equalTo(new SessionImpl[]{mockSessionOne, mockSessionTwo})));
     }
 
     @Test
@@ -492,7 +489,7 @@ public class BeaconSendingContextTest {
 
         // then
         assertThat(obtained, is(sameInstance(mockSessionOne)));
-        assertThat(target.getAllFinishedSessions(), is(equalTo(new SessionImpl[] { mockSessionTwo })));
+        assertThat(target.getAllFinishedSessions(), is(equalTo(new SessionImpl[]{mockSessionTwo})));
 
         // and when retrieving the next finished Session
         obtained = target.getNextFinishedSession();
@@ -533,8 +530,8 @@ public class BeaconSendingContextTest {
         target.disableCapture();
 
         // then
-        assertThat(target.getAllOpenSessions(), is(equalTo(new SessionImpl[] { mockSessionTwo, mockSessionThree })));
-        assertThat(target.getAllFinishedSessions(), is(equalTo(new SessionImpl[] { mockSessionOne, mockSessionFour })));
+        assertThat(target.getAllOpenSessions(), is(equalTo(new SessionImpl[]{mockSessionTwo, mockSessionThree})));
+        assertThat(target.getAllFinishedSessions(), is(emptyArray()));
 
         verify(configuration, times(1)).disableCapture();
         verify(mockSessionOne, times(1)).clearCapturedData();
@@ -564,8 +561,8 @@ public class BeaconSendingContextTest {
         target.handleStatusResponse(mockStatusResponse);
 
         // then
-        assertThat(target.getAllOpenSessions(), is(equalTo(new SessionImpl[] { mockSessionTwo })));
-        assertThat(target.getAllFinishedSessions(), is(equalTo(new SessionImpl[] { mockSessionOne })));
+        assertThat(target.getAllOpenSessions(), is(equalTo(new SessionImpl[]{mockSessionTwo})));
+        assertThat(target.getAllFinishedSessions(), is(equalTo(new SessionImpl[]{mockSessionOne})));
 
         verify(configuration, times(1)).updateSettings(mockStatusResponse);
         verify(configuration, times(1)).isCapture();
@@ -598,8 +595,8 @@ public class BeaconSendingContextTest {
         target.handleStatusResponse(mockStatusResponse);
 
         // then
-        assertThat(target.getAllOpenSessions(), is(equalTo(new SessionImpl[] { mockSessionTwo, mockSessionThree })));
-        assertThat(target.getAllFinishedSessions(), is(equalTo(new SessionImpl[] { mockSessionOne, mockSessionFour })));
+        assertThat(target.getAllOpenSessions(), is(equalTo(new SessionImpl[]{mockSessionTwo, mockSessionThree})));
+        assertThat(target.getAllFinishedSessions(), is(emptyArray()));
 
         verify(configuration, times(1)).updateSettings(mockStatusResponse);
         verify(configuration, times(1)).isCapture();
@@ -610,5 +607,38 @@ public class BeaconSendingContextTest {
         verify(mockSessionThree, times(1)).clearCapturedData();
         verify(mockSessionFour, times(1)).clearCapturedData();
         verifyNoMoreInteractions(mockSessionOne, mockSessionTwo, mockSessionThree, mockSessionFour);
+    }
+
+    @Test
+    public void isTimeSyncedReturnsTrueIfSyncWasNeverPerformed() {
+        // given
+        BeaconSendingContext target = new BeaconSendingContext(configuration, httpClientProvider, timingProvider);
+        when(timingProvider.isTimeSyncSupported()).thenReturn(true);
+
+        assertThat(target.isTimeSynced(), is(false));
+    }
+
+    @Test
+    public void isTimeSyncedReturnsTrueIfSyncIsNotSupported() {
+        // given
+        BeaconSendingContext target = new BeaconSendingContext(configuration, httpClientProvider, timingProvider);
+
+        // when
+        target.disableTimeSyncSupport();
+
+        // then
+        assertThat(target.isTimeSynced(), is(true));
+    }
+
+    @Test
+    public void timingProviderIsCalledOnTimeSyncInit() {
+        // given
+        BeaconSendingContext target = new BeaconSendingContext(configuration, httpClientProvider, timingProvider);
+
+        // when
+        target.initializeTimeSync(1234L, true);
+
+        // then
+        verify(timingProvider, times(1)).initialize(1234L, true);
     }
 }

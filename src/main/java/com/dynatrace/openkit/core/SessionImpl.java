@@ -1,106 +1,153 @@
-/***************************************************
- * (c) 2016-2017 Dynatrace LLC
+/**
+ * Copyright 2018 Dynatrace LLC
  *
- * @author: Christian Schwarzbauer
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
+
 package com.dynatrace.openkit.core;
 
 import com.dynatrace.openkit.api.Action;
 import com.dynatrace.openkit.api.RootAction;
 import com.dynatrace.openkit.api.Session;
-import com.dynatrace.openkit.core.configuration.AbstractConfiguration;
 import com.dynatrace.openkit.protocol.Beacon;
 import com.dynatrace.openkit.protocol.StatusResponse;
 import com.dynatrace.openkit.providers.HTTPClientProvider;
-import com.dynatrace.openkit.providers.ThreadIDProvider;
-import com.dynatrace.openkit.providers.TimeProvider;
+
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Actual implementation of the {@link Session} interface.
  */
 public class SessionImpl implements Session {
 
-	// end time of this Session
-	private long endTime = -1;
+    private static final RootAction NULL_ROOT_ACTION = new NullRootAction();
 
-	// BeaconSender and Beacon reference
-	private final BeaconSender beaconSender;
-	private final Beacon beacon;
+    // end time of this Session
+    private final AtomicLong endTime = new AtomicLong(-1);
 
-	// used for taking care to really leave all Actions at the end of this Session
-	private SynchronizedQueue<Action> openRootActions = new SynchronizedQueue<Action>();
+    // BeaconSender and Beacon reference
+    private final BeaconSender beaconSender;
+    private final Beacon beacon;
 
-	// *** constructors ***
+    // used for taking care to really leave all Actions at the end of this Session
+    private SynchronizedQueue<Action> openRootActions = new SynchronizedQueue<Action>();
 
-	SessionImpl(AbstractConfiguration configuration, String clientIPAddress, BeaconSender beaconSender, ThreadIDProvider threadIDProvider) {
-		this.beaconSender = beaconSender;
+    // *** constructors ***
 
-		// beacon has to be created immediately, as the session start time is taken at beacon construction
-		beacon = new Beacon(configuration, clientIPAddress, threadIDProvider);
-		beaconSender.startSession(this);
-	}
+    SessionImpl(BeaconSender beaconSender, Beacon beacon) {
+        this.beaconSender = beaconSender;
+        this.beacon = beacon;
 
-	// *** Session interface methods ***
+        beaconSender.startSession(this);
+    }
 
-	@Override
-	public RootAction enterAction(String actionName) {
-		return new RootActionImpl(beacon, actionName, openRootActions);
-	}
+    // *** Session interface methods ***
 
-	@Override
-	public void identifyUser(String userId) {
-		beacon.identifyUser(userId);
-	}
 
-	@Override
-	public void reportCrash(String errorName, String reason, String stacktrace) {
-		beacon.reportCrash(errorName, reason, stacktrace);
-	}
+    @Override
+    public void close() {
+        end();
+    }
 
-	@Override
-	public void end() {
-		// check if end() was already called before by looking at endTime
-		if (endTime != -1) {
-			return;
-		}
+    @Override
+    public RootAction enterAction(String actionName) {
+        if (isSessionEnded()) {
+            return NULL_ROOT_ACTION;
+        }
+        return new RootActionImpl(beacon, actionName, openRootActions);
+    }
 
-		// leave all Root-Actions for sanity reasons
-		while (!openRootActions.isEmpty()) {
-			Action action = openRootActions.get();
-			action.leaveAction();
-		}
+    @Override
+    public void identifyUser(String userTag) {
+        if (!isSessionEnded()) {
+            beacon.identifyUser(userTag);
+        }
+    }
 
-		endTime = TimeProvider.getTimestamp();
+    @Override
+    public void reportCrash(String errorName, String reason, String stacktrace) {
+        if (!isSessionEnded()) {
+            beacon.reportCrash(errorName, reason, stacktrace);
+        }
+    }
 
-		// create end session data on beacon
-		beacon.endSession(this);
+    @Override
+    public void end() {
+        // check if end() was already called before by looking at endTime
+        if (!endTime.compareAndSet(-1L, beacon.getCurrentTimestamp())) {
+            return;
+        }
 
-		// finish session and stop managing it
-		beaconSender.finishSession(this);
-	}
+        // leave all Root-Actions for sanity reasons
+        while (!openRootActions.isEmpty()) {
+            Action action = openRootActions.get();
+            action.leaveAction();
+        }
 
-	// *** public methods ***
+        // create end session data on beacon
+        beacon.endSession(this);
 
-	// sends the current Beacon state
-	public StatusResponse sendBeacon(HTTPClientProvider clientProvider, int numRetries) throws InterruptedException {
-		return beacon.send(clientProvider, numRetries);
-	}
+        // finish session and stop managing it
+        beaconSender.finishSession(this);
+    }
 
-	// *** getter methods ***
+    // *** public methods ***
 
-	public long getEndTime() {
-		return endTime;
-	}
+    // sends the current Beacon state
+    public StatusResponse sendBeacon(HTTPClientProvider clientProvider) {
+        return beacon.send(clientProvider);
+    }
 
-	/**
-	 * Clears data that has been captured so far.
-	 *
-	 * <p>
-	 *     This is called, when capturing is turned off to avoid having too much data.
-	 * </p>
-	 */
-	public void clearCapturedData() {
+    // *** getter methods ***
 
-		beacon.clearData();
-	}
+    public long getEndTime() {
+        return endTime.get();
+    }
+
+    /**
+     * Clears data that has been captured so far.
+     *
+     * <p>
+     * This is called, when capturing is turned off to avoid having too much data.
+     * </p>
+     */
+    public void clearCapturedData() {
+        beacon.clearData();
+    }
+
+    /**
+     * Test if this Session is empty or not.
+     *
+     * <p>
+     * A session is considered to be empty, if it does not contain any action or event data.
+     * </p>
+     *
+     * @return {@code true} if the session is empty, {@code false} otherwise.
+     */
+    public boolean isEmpty() {
+        return beacon.isEmpty();
+    }
+
+    /**
+     * Test if the session has already been ended.
+     *
+     * <p>
+     * A session is considered as ended, if the endTime is set to something other than minus 1.
+     * </p>
+     *
+     * @return {@code true} if the session has been ended already, {@code false} if the session is not ended yet.
+     */
+    boolean isSessionEnded() {
+        return getEndTime() != -1L;
+    }
 }
